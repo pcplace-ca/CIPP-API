@@ -5,6 +5,7 @@ function Get-HaloMapping {
     )
     #Get available mappings
     $Mappings = [pscustomobject]@{}
+
     $Filter = "PartitionKey eq 'Mapping'"
     Get-CIPPAzDataTableEntity @CIPPMapping -Filter $Filter | ForEach-Object {
         $Mappings | Add-Member -NotePropertyName $_.RowKey -NotePropertyValue @{ label = "$($_.HaloPSAName)"; value = "$($_.HaloPSA)" }
@@ -12,7 +13,9 @@ function Get-HaloMapping {
     $Tenants = Get-Tenants -IncludeAll
     $Table = Get-CIPPTable -TableName Extensionsconfig
     try {
-        $Configuration = ((Get-CIPPAzDataTableEntity @Table).config | ConvertFrom-Json).HaloPSA
+        $Configuration = ((Get-CIPPAzDataTableEntity @Table).config | ConvertFrom-Json -ea stop).HaloPSA
+
+
         $Token = Get-HaloToken -configuration $Configuration
         $i = 1
         $RawHaloClients = do {
@@ -21,8 +24,10 @@ function Get-HaloMapping {
             $i++
             $pagecount = [Math]::Ceiling($Result.record_count / 999)
         } while ($i -le $pagecount)
+    } catch {
+        Write-LogMessage -Message "Could not get HaloPSA Clients, error: $($_.Exception.Message)" -Level Error -tenant 'CIPP' -API 'HaloMapping'
+        $RawHaloClients = @(@{name = "Could not get HaloPSA Clients, error: $($_.Exception.Message)" }) 
     }
-    catch { $RawHaloClients = @() }
     $HaloClients = $RawHaloClients | ForEach-Object {
         [PSCustomObject]@{
             name  = $_.name
